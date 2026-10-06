@@ -30,6 +30,22 @@ struct PermissionRequest: Identifiable, Equatable, Sendable {
         RequestType.classify(toolName: toolName)
     }
 
+    /// Canonical (sorted-key JSON) signature of toolInput. Used to correlate a PostToolUse
+    /// completion to this request when the request carries no toolUseId — e.g. to clean up a
+    /// card that was approved outside the GUI (phone/remote).
+    var inputSignature: String {
+        Self.canonicalSignature(toolInput)
+    }
+
+    static func canonicalSignature(_ input: [String: Any]) -> String {
+        guard JSONSerialization.isValidJSONObject(input),
+              let data = try? JSONSerialization.data(withJSONObject: input, options: [.sortedKeys]),
+              let str = String(data: data, encoding: .utf8) else {
+            return ""
+        }
+        return str
+    }
+
     /// Question text for AskUserQuestion requests.
     /// Supports both `question` (string) and `questions` (array of objects) formats.
     var questionText: String? {

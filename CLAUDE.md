@@ -58,6 +58,9 @@ make clean       # swift package clean + remove .app
 make start       # launchctl load
 make stop        # launchctl unload
 make restart     # stop + start
+
+swift test       # Swift unit tests (run in ClaudeApprover/)
+python3 -m unittest discover -s tests   # Python hook tests
 ```
 
 ## Project Structure
@@ -87,6 +90,7 @@ ClaudeApprover/
     Services/
       SocketServer.swift       # actor, UDS accept loop on GCD
       NotificationService.swift
+  Tests/ClaudeApproverTests/  # XCTest (RequestQueue matching etc.)
 hook/
   permission_request.py   # PermissionRequest hook (timeout 300s)
   codex_permission_request.py # Codex PermissionRequest adapter (fail-open)
@@ -134,7 +138,10 @@ Codex-specific installation and trust instructions are documented in `docs/codex
 ```json
 {
   "type": "completion",
-  "tool_use_id": "toolu_xxx"
+  "tool_use_id": "toolu_xxx",
+  "session_id": "...",
+  "tool_name": "Bash",
+  "tool_input": {"command": "ls"}
 }
 ```
 
