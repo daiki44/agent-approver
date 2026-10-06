@@ -3,7 +3,7 @@
 PREFIX := $(HOME)/.claude/claude-approver
 BUILD_DIR := $(PREFIX)/ClaudeApprover
 BINARY := $(BUILD_DIR)/.build/release/ClaudeApprover
-APP_BUNDLE := $(PREFIX)/ClaudeApprover.app
+APP_BUNDLE := $(HOME)/Applications/ClaudeApprover.app
 APP_BINARY := $(APP_BUNDLE)/Contents/MacOS/ClaudeApprover
 INFO_PLIST_SRC := $(PREFIX)/scripts/Info.plist
 PLIST_TEMPLATE := $(PREFIX)/scripts/launchagent.plist.template
@@ -47,6 +47,9 @@ install: bundle
 	@# Migrate: remove old LaunchAgent if present
 	-launchctl unload $(OLD_PLIST_DST) 2>/dev/null
 	-rm -f $(OLD_PLIST_DST)
+	@# Reload LaunchAgent (unload first so app updates relaunch with the new binary)
+	-launchctl unload $(PLIST_DST) 2>/dev/null
+	-killall ClaudeApprover 2>/dev/null
 	@# Generate plist from template with actual paths
 	sed -e 's|__HOME__|$(HOME)|g' -e 's|__PREFIX__|$(PREFIX)|g' $(PLIST_TEMPLATE) > $(PLIST_DST)
 	launchctl load $(PLIST_DST)
@@ -68,6 +71,8 @@ uninstall:
 	@# Also clean up old plist name
 	-launchctl unload $(OLD_PLIST_DST) 2>/dev/null
 	-rm -f $(OLD_PLIST_DST)
+	@echo "Removing app bundle..."
+	-rm -rf "$(APP_BUNDLE)"
 	@echo "Unregistering hook..."
 	python3 $(PREFIX)/scripts/unregister_hook.py
 	@echo ""
