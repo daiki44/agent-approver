@@ -17,7 +17,7 @@ final class RequestQueueTests: XCTestCase {
 
     // MARK: - dequeueQuestionBySessionAndTool
 
-    /// 回帰: 別コマンドの完了通知が、承認待ちの toolPermission カードを dequeue（= deny）してはいけない。
+    /// Regression: a completion for a different command must never dequeue (= deny) a still-pending toolPermission card.
     func testQuestionFallbackNeverDequeuesPendingToolPermission() {
         let queue = RequestQueue()
         queue.enqueue(makeRequest(tool: "Bash", input: ["command": "rm -rf build"]))
@@ -56,7 +56,7 @@ final class RequestQueueTests: XCTestCase {
         queue.enqueue(other)
         queue.enqueue(target)
 
-        // キー順が異なっても同一入力として一致する
+        // Matches the same input even when the key order differs
         let signature = PermissionRequest.canonicalSignature(["description": "list", "command": "ls"])
         let dequeued = queue.dequeueToolPermissionMatching(
             sessionId: "s1", toolName: "Bash", inputSignature: signature)
