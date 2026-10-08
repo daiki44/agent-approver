@@ -144,6 +144,17 @@ actor SocketServer {
         onCancel?(id)
     }
 
+    /// Clean up a request that was resolved OUTSIDE the GUI (e.g. approved on phone/remote),
+    /// detected via its PostToolUse completion. Resumes the orphaned hook with passthrough so
+    /// it can never wrongly deny a still-pending request (unlike cancelAndNotify, which denies),
+    /// then notifies the UI to remove the card.
+    func passthroughAndNotify(_ id: UUID) {
+        if let cont = pendingHandlers.removeValue(forKey: id) {
+            cont.resume(returning: .passthrough)
+        }
+        onCancel?(id)
+    }
+
     func getOnRequest() -> (@Sendable (PermissionRequest) -> Void)? {
         onRequest
     }
@@ -334,10 +345,12 @@ actor SocketServer {
     // MARK: - Completion Message (fire-and-forget from PostToolUse hook)
 
     nonisolated private func handleCompletionMessage(_ json: [String: Any]) {
+        let toolInput = json["tool_input"] as? [String: Any] ?? [:]
         let completion = ToolCompletion(
             toolUseId: json["tool_use_id"] as? String ?? "",
             sessionId: json["session_id"] as? String ?? "",
-            toolName: json["tool_name"] as? String ?? ""
+            toolName: json["tool_name"] as? String ?? "",
+            inputSignature: PermissionRequest.canonicalSignature(toolInput)
         )
         debugLog("handleCompletionMessage: tool=\(completion.toolName) session=\(completion.sessionId.prefix(8)) tool_use_id=\(completion.toolUseId)")
         Task { [weak self] in
@@ -396,6 +409,7 @@ struct ToolCompletion: Sendable {
     let toolUseId: String
     let sessionId: String
     let toolName: String
+    let inputSignature: String
 }
 
 // MARK: - Errors

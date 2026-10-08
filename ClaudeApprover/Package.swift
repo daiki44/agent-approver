@@ -13,6 +13,11 @@ let package = Package(
             swiftSettings: [
                 .enableUpcomingFeature("BareSlashRegexLiterals")
             ]
+        ),
+        .testTarget(
+            name: "ClaudeApproverTests",
+            dependencies: ["ClaudeApprover"],
+            path: "Tests/ClaudeApproverTests"
         )
     ]
 )

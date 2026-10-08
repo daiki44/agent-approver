@@ -44,7 +44,7 @@ def _is_agent(hook_input: dict) -> bool:
     return False
 
 
-def _send_completion(tool_use_id: str, session_id: str, tool_name: str) -> None:
+def _send_completion(tool_use_id: str, session_id: str, tool_name: str, tool_input: dict) -> None:
     """Fire-and-forget で完了通知を送信。応答は不要。"""
     if not SOCKET_PATH.exists():
         _debug_log("Socket not found, skipping")
@@ -60,6 +60,9 @@ def _send_completion(tool_use_id: str, session_id: str, tool_name: str) -> None:
             "tool_use_id": tool_use_id,
             "session_id": session_id,
             "tool_name": tool_name,
+            # tool_input lets the app correlate this completion to a GUI card that was
+            # approved OUTSIDE the app (phone/remote), where the request carries no tool_use_id.
+            "tool_input": tool_input,
         }).encode("utf-8")
 
         header = struct.pack(">I", len(message))
@@ -83,6 +86,7 @@ def main():
     tool_use_id = hook_input.get("tool_use_id", "")
     tool_name = hook_input.get("tool_name", "")
     session_id = hook_input.get("session_id", "")
+    tool_input = hook_input.get("tool_input", {})
 
     _debug_log(f"tool={tool_name} tool_use_id={tool_use_id} session_id={session_id[:8]}")
 
@@ -95,7 +99,7 @@ def main():
         _debug_log("  -> SKIP (no session_id)")
         sys.exit(0)
 
-    _send_completion(tool_use_id, session_id, tool_name)
+    _send_completion(tool_use_id, session_id, tool_name, tool_input)
     _debug_log(f"  -> SENT completion")
     sys.exit(0)
 

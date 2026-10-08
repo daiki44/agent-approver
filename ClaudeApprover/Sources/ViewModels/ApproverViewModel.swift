@@ -137,29 +137,52 @@ final class ApproverViewModel {
     /// Idempotent: if the request was already removed by EOF detection or user action, this is a no-op.
     ///
     /// Matching strategy:
-    /// 1. Try exact match by toolUseId (if PermissionRequest included it)
-    /// 2. Fallback: match by sessionId + toolName (oldest first)
+    /// 1. Exact match by toolUseId — safe for any request type.
+    /// 2. Fallback for QUESTION requests only (AskUserQuestion). Questions are answered in
+    ///    the terminal (answers can't be injected via hooks), so they carry no toolUseId and
+    ///    are never resolved in the GUI — a PostToolUse completion is their only automatic
+    ///    cleanup. The fallback is restricted to `.question` + matching toolName so a
+    ///    completion can NEVER dequeue (and wrongly deny) a still-pending toolPermission
+    ///    request for the same tool/session — the bug that made the GUI "unresponsive".
     private func handleToolCompletion(_ completion: ToolCompletion) {
-        // Try exact match by toolUseId first
-        var request: PermissionRequest?
-        if !completion.toolUseId.isEmpty {
-            request = queue.dequeueByToolUseId(completion.toolUseId)
-        }
-        // Fallback: match by sessionId + toolName (oldest = first in queue)
-        if request == nil, !completion.sessionId.isEmpty {
-            request = queue.dequeueBySessionAndTool(
-                sessionId: completion.sessionId,
-                toolName: completion.toolName
-            )
-        }
-        guard let request else {
-            debugLog("handleToolCompletion: no-op (already removed) tool=\(completion.toolName) session=\(completion.sessionId.prefix(8))")
+        // 1. Exact toolUseId match — safe for any request type.
+        if !completion.toolUseId.isEmpty,
+           let request = queue.dequeueByToolUseId(completion.toolUseId) {
+            cleanupCompleted(request, completion, viaPassthrough: false)
             return
         }
-        debugLog("handleToolCompletion: dequeued id=\(request.id) tool=\(completion.toolName) session=\(completion.sessionId.prefix(8))")
+        // 2. Question fallback (AskUserQuestion answered in the terminal).
+        if !completion.sessionId.isEmpty,
+           let request = queue.dequeueQuestionBySessionAndTool(
+               sessionId: completion.sessionId, toolName: completion.toolName) {
+            cleanupCompleted(request, completion, viaPassthrough: false)
+            return
+        }
+        // 3. toolPermission approved OUTSIDE the GUI (phone/remote): the tool ran, so a
+        //    completion arrived, but resolveRequest never fired and the card would linger
+        //    until the 300s hook timeout. Match by session+tool+input (input prevents
+        //    dequeuing a different still-pending request) and clean up via passthrough so a
+        //    rare duplicate-command collision can never wrongly deny.
+        if !completion.sessionId.isEmpty,
+           let request = queue.dequeueToolPermissionMatching(
+               sessionId: completion.sessionId,
+               toolName: completion.toolName,
+               inputSignature: completion.inputSignature) {
+            cleanupCompleted(request, completion, viaPassthrough: true)
+            return
+        }
+        debugLog("handleToolCompletion: no-op (no match) tool=\(completion.toolName) session=\(completion.sessionId.prefix(8))")
+    }
+
+    private func cleanupCompleted(_ request: PermissionRequest, _ completion: ToolCompletion, viaPassthrough: Bool) {
+        debugLog("handleToolCompletion: dequeued id=\(request.id) tool=\(completion.toolName) session=\(completion.sessionId.prefix(8)) passthrough=\(viaPassthrough)")
         notificationService.removeDelivered(requestId: request.id)
         Task {
-            await server.cancelAndNotify(request.id)
+            if viaPassthrough {
+                await server.passthroughAndNotify(request.id)
+            } else {
+                await server.cancelAndNotify(request.id)
+            }
         }
         updateAppDelegate()
     }
