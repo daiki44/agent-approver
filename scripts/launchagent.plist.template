@@ -6,7 +6,7 @@
     <string>io.github.daiki44.claude-approver</string>
     <key>ProgramArguments</key>
     <array>
-        <string>__PREFIX__/ClaudeApprover.app/Contents/MacOS/ClaudeApprover</string>
+        <string>__HOME__/Applications/ClaudeApprover.app/Contents/MacOS/ClaudeApprover</string>
     </array>
     <key>KeepAlive</key>
     <true/>
