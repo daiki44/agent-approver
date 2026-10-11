@@ -94,6 +94,58 @@ final class RequestQueueTests: XCTestCase {
         XCTAssertEqual(queue.count, 1)
     }
 
+    // MARK: - dequeuePlanApprovals
+
+    /// Regression: a plan approved/rejected in the terminal used to leave its card lingering
+    /// until the 300s hook timeout. Every pending plan card of the session is stale once a
+    /// main-agent completion arrives, so all of them (not just the oldest) must go.
+    func testPlanApprovalsDequeuesAllPlanCardsOfSession() {
+        let queue = RequestQueue()
+        let stale = makeRequest(tool: "ExitPlanMode", input: ["plan": "old"])
+        let current = makeRequest(tool: "ExitPlanMode", input: ["plan": "new"])
+        queue.enqueue(stale)
+        queue.enqueue(current)
+
+        let dequeued = queue.dequeuePlanApprovals(sessionId: "s1")
+
+        XCTAssertEqual(dequeued.map(\.id), [stale.id, current.id])
+        XCTAssertTrue(queue.isEmpty)
+    }
+
+    /// Only plan cards are swept: a pending toolPermission/question card of the same session
+    /// must survive (dequeuing it would wrongly deny it).
+    func testPlanApprovalsNeverDequeuesToolPermissionOrQuestion() {
+        let queue = RequestQueue()
+        let bash = makeRequest(tool: "Bash", input: ["command": "ls"])
+        let question = makeRequest(tool: "AskUserQuestion", input: ["question": "A"])
+        let plan = makeRequest(tool: "ExitPlanMode", input: ["plan": "p"])
+        queue.enqueue(bash)
+        queue.enqueue(question)
+        queue.enqueue(plan)
+
+        let dequeued = queue.dequeuePlanApprovals(sessionId: "s1")
+
+        XCTAssertEqual(dequeued.map(\.id), [plan.id])
+        XCTAssertEqual(queue.items.map(\.id), [bash.id, question.id])
+    }
+
+    func testPlanApprovalsIgnoresOtherSession() {
+        let queue = RequestQueue()
+        queue.enqueue(makeRequest(tool: "ExitPlanMode", input: ["plan": "p"], session: "s2"))
+
+        XCTAssertTrue(queue.dequeuePlanApprovals(sessionId: "s1").isEmpty)
+        XCTAssertEqual(queue.count, 1)
+    }
+
+    /// A request/completion without a session id cannot be correlated, so nothing is swept.
+    func testPlanApprovalsIgnoresEmptySessionId() {
+        let queue = RequestQueue()
+        queue.enqueue(makeRequest(tool: "ExitPlanMode", input: ["plan": "p"], session: ""))
+
+        XCTAssertTrue(queue.dequeuePlanApprovals(sessionId: "").isEmpty)
+        XCTAssertEqual(queue.count, 1)
+    }
+
     // MARK: - canonicalSignature
 
     func testCanonicalSignatureIsKeyOrderIndependent() {

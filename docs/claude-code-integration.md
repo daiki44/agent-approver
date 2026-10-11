@@ -47,6 +47,7 @@ make uninstall
 - `ExitPlanMode` requests have a dedicated plan approval card.
 - Permission suggestions expose Claude Code's `updatedPermissions` choices as “Always Allow” options.
 - `PostToolUse` removes stale cards after a tool completes outside the app or after terminal passthrough.
+- Plan approval cards answered in the terminal are removed when any main-agent tool completes in the same session. Claude Code fires no hook when a plan is rejected in the terminal, so the model resuming work is the only signal; a rejected plan followed by a text-only reply keeps its card until the 300-second timeout.
 - Requests originating from supported Claude Code subagent signals are auto-approved by the Claude adapter as documented in `CLAUDE.md`.
 
 ## Decision and passthrough behavior

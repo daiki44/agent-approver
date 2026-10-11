@@ -54,6 +54,22 @@ final class RequestQueue {
         return items.remove(at: index)
     }
 
+    /// Find and remove EVERY planApproval request of the session.
+    /// Plan cards are usually answered in the terminal, and neither a terminal approve nor a
+    /// terminal reject can be matched by toolUseId (PermissionRequest carries none). The main
+    /// agent cannot run any tool while its plan approval is pending, so a main-agent
+    /// completion in the same session means the plan gate has been passed — approved
+    /// (ExitPlanMode ran) or rejected (the model resumed planning). All pending plan cards of
+    /// that session are therefore stale, not just the oldest one.
+    /// Restricted to `.planApproval` so a completion can never dequeue (and wrongly deny) a
+    /// still-pending toolPermission or question card.
+    func dequeuePlanApprovals(sessionId: String) -> [PermissionRequest] {
+        guard !sessionId.isEmpty else { return [] }
+        let stale = items.filter { $0.requestType == .planApproval && $0.sessionId == sessionId }
+        items.removeAll { $0.requestType == .planApproval && $0.sessionId == sessionId }
+        return stale
+    }
+
     func clear() {
         items.removeAll()
     }
