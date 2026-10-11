@@ -26,8 +26,10 @@ final class NotificationService: NSObject, @unchecked Sendable {
     }
 
     private static func getCenter() throws -> UNUserNotificationCenter {
-        // Check if we have a valid bundle identifier (required for notifications)
-        guard Bundle.main.bundleIdentifier != nil else {
+        // Check if we have a valid bundle identifier (required for notifications).
+        // A bundle id alone is not enough: processes like xctest have one but are not an
+        // .app, and UNUserNotificationCenter.current() raises there.
+        guard Bundle.main.bundleIdentifier != nil, Bundle.main.bundleURL.pathExtension == "app" else {
             throw NotificationError.noBundleIdentifier
         }
         return UNUserNotificationCenter.current()

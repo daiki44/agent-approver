@@ -137,6 +137,10 @@ final class ApproverViewModel {
     /// Idempotent: if the request was already removed by EOF detection or user action, this is a no-op.
     ///
     /// Matching strategy:
+    /// 0. Plan cards (ExitPlanMode): any completion in the session sweeps them, independently of
+    ///    the strategies below — see `RequestQueue.dequeuePlanApprovals`. Cleaned up via
+    ///    passthrough, so a rare false positive only drops the GUI card (the terminal dialog
+    ///    stays usable) and can never wrongly deny.
     /// 1. Exact match by toolUseId — safe for any request type.
     /// 2. Fallback for QUESTION requests only (AskUserQuestion). Questions are answered in
     ///    the terminal (answers can't be injected via hooks), so they carry no toolUseId and
@@ -144,7 +148,13 @@ final class ApproverViewModel {
     ///    cleanup. The fallback is restricted to `.question` + matching toolName so a
     ///    completion can NEVER dequeue (and wrongly deny) a still-pending toolPermission
     ///    request for the same tool/session — the bug that made the GUI "unresponsive".
-    private func handleToolCompletion(_ completion: ToolCompletion) {
+    func handleToolCompletion(_ completion: ToolCompletion) {
+        // 0. Stale plan cards of this session (answered in the terminal). Not an early return:
+        //    the same completion may also clean up a card below.
+        let stalePlans = queue.dequeuePlanApprovals(sessionId: completion.sessionId)
+        for request in stalePlans {
+            cleanupCompleted(request, completion, viaPassthrough: true)
+        }
         // 1. Exact toolUseId match — safe for any request type.
         if !completion.toolUseId.isEmpty,
            let request = queue.dequeueByToolUseId(completion.toolUseId) {
@@ -171,6 +181,7 @@ final class ApproverViewModel {
             cleanupCompleted(request, completion, viaPassthrough: true)
             return
         }
+        guard stalePlans.isEmpty else { return }
         debugLog("handleToolCompletion: no-op (no match) tool=\(completion.toolName) session=\(completion.sessionId.prefix(8))")
     }
 
